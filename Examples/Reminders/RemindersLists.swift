@@ -6,7 +6,7 @@ import StructuredQueries
 import SwiftUI
 
 struct RemindersListsView: View {
-  @SharedReader(
+  @State.SharedReader(
     .fetchAll(
       RemindersList
         .group(by: \.id)
@@ -101,13 +101,6 @@ struct RemindersListsView: View {
       Button("Add list") {
         isAddListPresented = true
       }
-    }
-    .sheet(isPresented: $isAddListPresented) {
-      NavigationStack {
-        RemindersListForm()
-          .navigationTitle("New list")
-      }
-      .presentationDetents([.medium])
     }
     .sheet(isPresented: $isAddListPresented) {
       NavigationStack {

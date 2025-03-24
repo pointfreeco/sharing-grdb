@@ -5,6 +5,7 @@ import SQLite3
 @_exported import StructuredQueriesCore
 
 extension StructuredQueriesCore.Statement {
+  @available(iOS 17.0.0, *)
   public func execute(_ db: GRDB.Database) throws
   where QueryValue == () {
     guard let handle = db.sqliteConnection else {
@@ -14,6 +15,7 @@ extension StructuredQueriesCore.Statement {
     try Database(handle, db: db).execute(self)
   }
 
+  @available(iOS 17.0.0, *)
   public func fetchAll<each Value: QueryRepresentable>(
     _ db: GRDB.Database
   ) throws -> [(repeat (each Value).QueryOutput)]
@@ -25,6 +27,7 @@ extension StructuredQueriesCore.Statement {
     return try Database(handle, db: db).execute(self)
   }
 
+  @available(iOS 17.0.0, *)
   public func fetchAll(
     _ db: GRDB.Database
   ) throws -> [QueryValue.QueryOutput]
@@ -36,6 +39,7 @@ extension StructuredQueriesCore.Statement {
     return try Database(handle, db: db).execute(self)
   }
 
+  @available(iOS 17.0.0, *)
   public func fetchOne<each Value: QueryRepresentable>(
     _ db: GRDB.Database
   ) throws -> (repeat (each Value).QueryOutput)?
@@ -47,6 +51,7 @@ extension StructuredQueriesCore.Statement {
     return try Database(handle, db: db).execute(self).first
   }
 
+  @available(iOS 17.0.0, *)
   public func fetchOne(
     _ db: GRDB.Database
   ) throws -> QueryValue.QueryOutput?
@@ -60,6 +65,7 @@ extension StructuredQueriesCore.Statement {
 }
 
 extension SelectStatement where QueryValue == () {
+  @available(iOS 17.0.0, *)
   public func fetchAll<each J: StructuredQueriesCore.Table>(
     _ db: GRDB.Database
   ) throws -> [(From.QueryOutput, repeat (each J).QueryOutput)]
@@ -67,6 +73,7 @@ extension SelectStatement where QueryValue == () {
     try self.selectStar().fetchAll(db)
   }
 
+  @available(iOS 17.0.0, *)
   public func fetchOne<each J: StructuredQueriesCore.Table>(
     _ db: GRDB.Database
   ) throws -> (From.QueryOutput, repeat (each J).QueryOutput)?
