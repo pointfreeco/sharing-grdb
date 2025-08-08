@@ -35,7 +35,7 @@ func appDatabase() -> any DatabaseWriter {
 ### Step 2: Create configuration
 
 Inside this static variable we can create a [`Configuration`][config-docs] value that is used to
-configure the database. We highly recommend always turning on 
+configure the database. We recommend turning on 
 [foreign key](https://www.sqlite.org/foreignkeys.html) constraints to protect the integrity of your
 data:
 
@@ -45,6 +45,9 @@ data:
 +  configuration.foreignKeysEnabled = true
  }
 ```
+
+> Important: If you are synchronizing your database to CloudKit, then you must not enable
+> foreign keys. See <doc:CloudKit#Foreign-key-relationships> for more information. 
 
 This will prevent you from deleting rows that leave other rows with invalid associations. For 
 example, if a "teams" table had an association to a "sports" table, you would not be allowed to
@@ -84,7 +87,6 @@ when running your app in the simulator/device and using `Swift.print` in preview
 > Note: `expandedDescription` will also print the data bound to the SQL statement, which can include
 > sensitive data that you may not want to leak. In this case we feel it is OK because everything
 > is surrounded in `#if DEBUG`, but it is something to be careful of in your own apps.
-
 
 > Tip: `@Dependency(\.context)` comes from the [Swift Dependencies][swift-dependencies-gh] library,
 > which SharingGRDB uses to share its database connection across fetch keys. It allows you to

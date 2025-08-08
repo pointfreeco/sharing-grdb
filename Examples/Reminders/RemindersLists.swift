@@ -1,3 +1,4 @@
+import CloudKit
 import SharingGRDB
 import SwiftUI
 import SwiftUINavigation
@@ -12,8 +13,13 @@ class RemindersListsModel {
       .group(by: \.id)
       .order(by: \.position)
       .leftJoin(Reminder.all) { $0.id.eq($1.remindersListID) && !$1.isCompleted }
-      .select {
-        ReminderListState.Columns(remindersCount: $1.id.count(), remindersList: $0)
+      .leftJoin(SyncMetadata.all) { $0.recordName.eq($2.recordName) }
+      .select { remindersList, reminder, metadata in
+        ReminderListState.Columns(
+          remindersCount: reminder.id.count(),
+          remindersList: remindersList,
+          share: metadata.share
+        )
       },
     animation: .default
   )
@@ -32,14 +38,15 @@ class RemindersListsModel {
 
   @ObservationIgnored
   @FetchOne(
-    Reminder.select {
-      Stats.Columns(
-        allCount: $0.count(filter: !$0.isCompleted),
-        flaggedCount: $0.count(filter: $0.isFlagged),
-        scheduledCount: $0.count(filter: $0.isScheduled),
-        todayCount: $0.count(filter: $0.isToday)
-      )
-    }
+    Reminder
+      .select {
+        Stats.Columns(
+          allCount: $0.count(filter: !$0.isCompleted),
+          flaggedCount: $0.count(filter: $0.isFlagged && !$0.isCompleted),
+          scheduledCount: $0.count(filter: $0.isScheduled),
+          todayCount: $0.count(filter: $0.isToday)
+        )
+      }
   )
   var stats = Stats()
 
@@ -106,31 +113,35 @@ class RemindersListsModel {
       try database.write { db in
         var ids = remindersLists.map(\.remindersList.id)
         ids.move(fromOffsets: source, toOffset: destination)
-        try RemindersList
-          .where { $0.id.in(ids) }
-          .update {
-            let ids = Array(ids.enumerated())
-            let (first, rest) = (ids.first!, ids.dropFirst())
-            $0.position =
-            rest
-              .reduce(Case($0.id).when(first.element, then: first.offset)) { cases, id in
-                cases.when(id.element, then: id.offset)
-              }
-              .else($0.position)
-          }
+        for (offset, id) in ids.enumerated() {
+          try RemindersList.find(id)
+            .update { $0.position = offset }
+            .execute(db)
+        }
+      }
+    }
+  }
+
+  func deleteTags(indexSet: IndexSet) {
+    withErrorReporting {
+      let tagIDs = indexSet.map { tags[$0].id }
+      try database.write { db in
+        try Tag
+          .where { $0.id.in(tagIDs) }
+          .delete()
           .execute(db)
       }
     }
   }
 
   #if DEBUG
-  func seedDatabaseButtonTapped() {
-    withErrorReporting {
-      try database.write { db in
-        try db.seedSampleData()
+    func seedDatabaseButtonTapped() {
+      withErrorReporting {
+        try database.write { db in
+          try db.seedSampleData()
+        }
       }
     }
-  }
   #endif
 
   @CasePathable
@@ -145,6 +156,8 @@ class RemindersListsModel {
     var id: RemindersList.ID { remindersList.id }
     var remindersCount: Int
     var remindersList: RemindersList
+    @Column(as: CKShare?.SystemFieldsRepresentation.self)
+    var share: CKShare?
   }
 
   @Selection
@@ -235,9 +248,11 @@ struct RemindersListsView: View {
             } label: {
               RemindersListRow(
                 remindersCount: state.remindersCount,
-                remindersList: state.remindersList
+                remindersList: state.remindersList,
+                share: state.share
               )
             }
+            .buttonStyle(.borderless)
             .foregroundStyle(.primary)
           }
           .onMove(perform: model.move(from:to:))
@@ -260,6 +275,9 @@ struct RemindersListsView: View {
             }
             .foregroundStyle(.primary)
           }
+          .onDelete { indexSet in
+            model.deleteTags(indexSet: indexSet)
+          }
         } header: {
           Text("Tags")
             .font(.system(.title2, design: .rounded, weight: .bold))
@@ -279,7 +297,7 @@ struct RemindersListsView: View {
     .listStyle(.insetGrouped)
     .toolbar {
       #if DEBUG
-      ToolbarItem(placement: .automatic) {
+        ToolbarItem(placement: .automatic) {
           Menu {
             Button {
               model.seedDatabaseButtonTapped()

@@ -30,10 +30,12 @@ let package = Package(
   ],
   dependencies: [
     .package(url: "https://github.com/groue/GRDB.swift", from: "7.4.0"),
+    .package(url: "https://github.com/apple/swift-collections", from: "1.0.0"),
     .package(url: "https://github.com/pointfreeco/swift-dependencies", from: "1.9.0"),
-    .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "1.5.0"),
     .package(url: "https://github.com/pointfreeco/swift-sharing", from: "2.3.0"),
-    .package(url: "https://github.com/pointfreeco/swift-structured-queries", from: "0.7.0"),
+    .package(url: "https://github.com/pointfreeco/swift-snapshot-testing", from: "1.0.0"),
+    .package(url: "https://github.com/pointfreeco/swift-structured-queries", branch: "main"),
+    .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "1.5.0"),
   ],
   targets: [
     .target(
@@ -48,6 +50,7 @@ let package = Package(
       dependencies: [
         "StructuredQueriesGRDBCore",
         .product(name: "GRDB", package: "GRDB.swift"),
+        .product(name: "OrderedCollections", package: "swift-collections"),
         .product(name: "Sharing", package: "swift-sharing"),
       ]
     ),
@@ -56,6 +59,8 @@ let package = Package(
       dependencies: [
         "SharingGRDB",
         .product(name: "DependenciesTestSupport", package: "swift-dependencies"),
+        .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
+        .product(name: "SnapshotTestingCustomDump", package: "swift-snapshot-testing"),
         .product(name: "StructuredQueries", package: "swift-structured-queries"),
       ]
     ),
