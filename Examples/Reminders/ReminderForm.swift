@@ -135,7 +135,7 @@ struct ReminderFormView: View {
         selectedTags = try await database.read { db in
           try Tag
             .order(by: \.title)
-            .join(ReminderTag.all) { $0.id.eq($1.tagID) }
+            .join(ReminderTag.all) { $0.primaryKey.eq($1.tagID) }
             .where { $1.reminderID.eq(reminderID) }
             .select { tag, _ in tag }
             .fetchAll(db)
@@ -179,13 +179,13 @@ struct ReminderFormView: View {
           .execute(db)
         try ReminderTag.insert {
           selectedTags.map { tag in
-            ReminderTag.Draft(reminderID: reminderID, tagID: tag.id)
+            ReminderTag.Draft(reminderID: reminderID, tagID: tag.title)
           }
         }
         .execute(db)
       }
+      dismiss()
     }
-    dismiss()
   }
 }
 
@@ -211,7 +211,7 @@ struct ReminderFormPreview: PreviewProvider {
         let remindersList = try RemindersList.all.fetchOne(db)!
         return (
           remindersList,
-          try Reminder.where { $0.remindersListID == remindersList.id }.fetchOne(db)!
+          try Reminder.where { $0.remindersListID.eq(remindersList.id) }.fetchOne(db)!
         )
       }
     }

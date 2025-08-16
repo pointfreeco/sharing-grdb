@@ -20,6 +20,7 @@ associations, and more.
   * [Migrations](#Migrations)
     * [Lightweight migrations](#Lightweight-migrations)
     * [Manual migrations](#Manual-migrations)
+  * [CloudKit](#CloudKit)
   * [Supported Apple platforms](#Supported-Apple-platforms)
 
 ### Defining your schema
@@ -773,6 +774,87 @@ Some things to note about the above comparison:
 So, while lightweight migrations are one of the "magical" features of SwiftData, we feel that 
 complex "manual" migrations are common enough that one should optimize for them rather than the
 other way around.
+
+### CloudKit
+
+Both SharingGRDB and SwiftData support basic synchronization of models to CloudKit so that data
+can be made available on all of a user's devices. However, SharingGRDB also supports sharing records
+with other iCloud users, and it exposes the underlying CloudKit data types (e.g. `CKRecord`) so
+that you can interact directly with CloudKit if needed.
+
+Setting up a database and sync engine in SharingGRDB isn't much different from setting up a
+SwiftData stack with CloudKit. The main difference is that one must explicitly provide the 
+container identifier in SharingGRDB because SwiftData has been privileged in being able to 
+inspect the Entitlements.plist in order to automatically extract that information:
+
+@Row {
+  @Column {
+    ```swift
+    // SharingGRDB
+    @main 
+    struct MyApp: App {
+      init() {
+        try! prepareDependencies {
+          $0.defaultDatabase = try appDatabase()
+          $0.defaultSyncEngine = try SyncEngine(
+            for: $0.defaultDatabase,
+            tables: RemindersList.self, Reminder.self
+          )
+        }
+      }
+      
+      …
+    }
+    ```
+  }
+  @Column {
+    ```swift
+    // SwiftData
+    @main
+    struct MyApp: App {
+      let modelContainer: ModelContainer
+      init() {
+        let schema = Schema([
+          Reminder.self,
+          RemindersList.self,
+        ])
+        let modelConfiguration = ModelConfiguration(schema: schema)
+        modelContainer = try! ModelContainer(
+          for: schema, 
+          configurations: [modelConfiguration]
+        )
+      }
+
+      …
+    }
+    ```
+  }
+}
+
+Once this initial set up is performed, all insertions, updates and deletions from the database
+will be automatically synchronized to CloudKit.
+
+SwiftData also has a few limitations in what features you are allowed to use in your schema:
+
+* Unique constraints are not allowed on columns.
+* All properties on a model must be optional or have a default value.
+* All relationships must be optional.
+
+SharingGRDB has only one of these limitations:
+
+* Unique constraints on columns (except for the primary key) cannot be upheld on a distributed
+schema. For example, if you have a `Tag` table with a unique `title` column, then what
+are you to do if two different devices create a tag with the title "family" at the same time?
+* Columns on freshly created tables do not need to have default values or be nullable. Only
+newly added columns to existing tables need to either be nullable or have a default. See 
+<doc:CloudKit#Adding-columns> for more info.
+* Relationships on freshly created do not need to be nullable. Only newly added columns to
+existing tables need to be nullable. See <doc:CloudKit#Adding-columns> for more info.
+
+For more information about requirements of your schema in order to use CloudKit synchronization,
+see <doc:CloudKit#Designing-your-schema-with-synchronization-in-mind> and
+<doc:CloudKit#Backwards-compatible-migrations>, and for more general
+information about CloudKit synchronization, see <doc:CloudKit>.
 
 ### Supported Apple platforms
 
