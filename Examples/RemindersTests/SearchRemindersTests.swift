@@ -13,26 +13,23 @@ extension BaseTestSuite {
 
     @Test func basics() async throws {
       let model = SearchRemindersModel()
-      try await model.$reminders.load()
-      try await model.$completedCount.load()
+      try await model.$searchResults.load()
 
-      #expect(model.completedCount == 0)
-      assertInlineSnapshot(of: model.reminders, as: .customDump) {
+      #expect(model.searchResults.completedCount == 0)
+      assertInlineSnapshot(of: model.searchResults.rows, as: .customDump) {
         """
         []
         """
       }
 
       model.searchText = "Take"
-      try await model.$reminders.load()
-      try await model.$completedCount.load()
-      try await Task.sleep(for: .seconds(0.5))
-      #expect(model.completedCount == 1)
-      assertInlineSnapshot(of: model.reminders, as: .customDump) {
+      try await model.searchTask?.value
+      #expect(model.searchResults.completedCount == 1)
+      assertInlineSnapshot(of: model.searchResults.rows, as: .customDump) {
         """
         [
           [0]: SearchRemindersModel.Row(
-            isPastDue: false,
+            isPastDue: true,
             notes: "",
             reminder: Reminder(
               id: UUID(00000000-0000-0000-0000-00000000000A),
@@ -51,7 +48,8 @@ extension BaseTestSuite {
               position: 2,
               title: "Family"
             ),
-            tags: []
+            tags: "",
+            title: "**Take** out trash"
           )
         ]
         """
@@ -61,16 +59,13 @@ extension BaseTestSuite {
     @Test func showCompleted() async throws {
       let model = SearchRemindersModel()
       model.searchText = "Take"
-      await model.showCompletedButtonTapped()
-      try await Task.sleep(for: .seconds(0.1))
-      try await model.$reminders.load()
-      try await model.$completedCount.load()
+      try await model.showCompletedButtonTapped()
 
-      assertInlineSnapshot(of: model.reminders, as: .customDump) {
+      assertInlineSnapshot(of: model.searchResults.rows, as: .customDump) {
         """
         [
           [0]: SearchRemindersModel.Row(
-            isPastDue: false,
+            isPastDue: true,
             notes: "",
             reminder: Reminder(
               id: UUID(00000000-0000-0000-0000-00000000000A),
@@ -89,7 +84,8 @@ extension BaseTestSuite {
               position: 2,
               title: "Family"
             ),
-            tags: []
+            tags: "",
+            title: "**Take** out trash"
           ),
           [1]: SearchRemindersModel.Row(
             isPastDue: false,
@@ -111,11 +107,8 @@ extension BaseTestSuite {
               position: 1,
               title: "Personal"
             ),
-            tags: [
-              [0]: "car",
-              [1]: "kids",
-              [2]: "social"
-            ]
+            tags: "#car #kids #social",
+            title: "**Take** a walk"
           )
         ]
         """
@@ -125,17 +118,15 @@ extension BaseTestSuite {
     @Test func deleteCompleted() async throws {
       let model = SearchRemindersModel()
       model.searchText = "Take"
-      await model.showCompletedButtonTapped()
-      try await Task.sleep(for: .seconds(0.1))
+      try await model.showCompletedButtonTapped()
       model.deleteCompletedReminders()
-      try await model.$reminders.load()
-      try await model.$completedCount.load()
-      #expect(model.completedCount == 0)
-      assertInlineSnapshot(of: model.reminders, as: .customDump) {
+      try await model.$searchResults.load()
+      #expect(model.searchResults.completedCount == 0)
+      assertInlineSnapshot(of: model.searchResults.rows, as: .customDump) {
         """
         [
           [0]: SearchRemindersModel.Row(
-            isPastDue: false,
+            isPastDue: true,
             notes: "",
             reminder: Reminder(
               id: UUID(00000000-0000-0000-0000-00000000000A),
@@ -154,7 +145,8 @@ extension BaseTestSuite {
               position: 2,
               title: "Family"
             ),
-            tags: []
+            tags: "",
+            title: "**Take** out trash"
           )
         ]
         """
