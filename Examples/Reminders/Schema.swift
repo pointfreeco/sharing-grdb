@@ -20,6 +20,14 @@ struct RemindersList: Hashable, Identifiable {
 extension RemindersList.Draft: Identifiable {}
 
 @Table
+struct RemindersListAsset: Hashable, Identifiable {
+  @Column(primaryKey: true)
+  let remindersListID: RemindersList.ID
+  var coverImage: Data?
+  var id: RemindersList.ID { remindersListID }
+}
+
+@Table
 struct Reminder: Codable, Equatable, Identifiable {
   let id: UUID
   var dueDate: Date?
@@ -96,12 +104,26 @@ struct ReminderTag: Hashable, Identifiable {
   var tagID: Tag.ID
 }
 
+extension DependencyValues {
+  mutating func bootstrapDatabase() throws {
+    defaultDatabase = try Reminders.appDatabase()
+    defaultSyncEngine = try SyncEngine(
+      for: defaultDatabase,
+      tables: RemindersList.self,
+      RemindersListAsset.self,
+      Reminder.self,
+      Tag.self,
+      ReminderTag.self
+    )
+  }
+}
+
 func appDatabase() throws -> any DatabaseWriter {
   @Dependency(\.context) var context
   let database: any DatabaseWriter
   var configuration = Configuration()
-  configuration.foreignKeysEnabled = true
   configuration.prepareDatabase { db in
+    try db.attachMetadatabase()
     #if DEBUG
       db.trace(options: .profile) {
         if context == .live {
@@ -119,11 +141,17 @@ func appDatabase() throws -> any DatabaseWriter {
       context == .live
       ? URL.documentsDirectory.appending(component: "db.sqlite").path()
       : URL.temporaryDirectory.appending(component: "\(UUID().uuidString)-db.sqlite").path()
-    logger.info("open \(path)")
+    logger.debug(
+      """
+      App database
+      open "\(path)"
+      """
+    )
     database = try DatabasePool(path: path, configuration: configuration)
   }
   var migrator = DatabaseMigrator()
   #if DEBUG
+  // TODO: should we warn against this for CK apps?
     migrator.eraseDatabaseOnSchemaChange = true
   #endif
   migrator.registerMigration("Create initial tables") { db in
@@ -132,9 +160,19 @@ func appDatabase() throws -> any DatabaseWriter {
       """
       CREATE TABLE "remindersLists" (
         "id" TEXT PRIMARY KEY NOT NULL ON CONFLICT REPLACE DEFAULT (uuid()),
-        "color" INTEGER NOT NULL DEFAULT \(raw: defaultListColor ?? 0),
-        "position" INTEGER NOT NULL DEFAULT 0,
-        "title" TEXT NOT NULL
+        "color" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT \(raw: defaultListColor ?? 0),
+        "position" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
+        "title" TEXT NOT NULL ON CONFLICT REPLACE DEFAULT ''
+      ) STRICT
+      """
+    )
+    .execute(db)
+    try #sql(
+      """
+      CREATE TABLE "remindersListAssets" (
+        "remindersListID" TEXT PRIMARY KEY NOT NULL 
+          REFERENCES "remindersLists"("id") ON DELETE CASCADE,
+        "coverImage" BLOB
       ) STRICT
       """
     )
@@ -144,13 +182,13 @@ func appDatabase() throws -> any DatabaseWriter {
       CREATE TABLE "reminders" (
         "id" TEXT PRIMARY KEY NOT NULL ON CONFLICT REPLACE DEFAULT (uuid()),
         "dueDate" TEXT,
-        "isCompleted" INTEGER NOT NULL DEFAULT 0,
-        "isFlagged" INTEGER NOT NULL DEFAULT 0,
-        "notes" TEXT,
-        "position" INTEGER NOT NULL DEFAULT 0,
+        "isCompleted" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
+        "isFlagged" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
+        "notes" TEXT NOT NULL ON CONFLICT REPLACE DEFAULT '',
+        "position" INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
         "priority" INTEGER,
         "remindersListID" TEXT NOT NULL REFERENCES "remindersLists"("id") ON DELETE CASCADE,
-        "title" TEXT NOT NULL
+        "title" TEXT NOT NULL ON CONFLICT REPLACE DEFAULT ''
       ) STRICT
       """
     )

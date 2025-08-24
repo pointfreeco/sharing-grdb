@@ -5,7 +5,8 @@
 
 # SharingGRDB
 
-A [fast](#Performance), lightweight replacement for SwiftData, powered by SQL.
+A [fast](#Performance), lightweight replacement for SwiftData, powered by SQL and supporting 
+CloudKit synchronization.
 
 [![CI](https://github.com/pointfreeco/sharing-grdb/actions/workflows/ci.yml/badge.svg)](https://github.com/pointfreeco/sharing-grdb/actions/workflows/ci.yml)
 [![Slack](https://img.shields.io/badge/slack-chat-informational.svg?label=Slack&logo=slack)](https://www.pointfree.co/slack-invite)
@@ -183,7 +184,7 @@ var items
 
 
 @FetchOne(Item.count())
-var inStockItemsCount = 0
+var itemsCount = 0
 
 ```
 
@@ -254,6 +255,29 @@ try modelContext.save()
 > For more information on how SharingGRDB compares to SwiftData, see
 > [Comparison with SwiftData][comparison-swiftdata-article].
 
+Further, if you want to synchronize the local database to CloudKit so that it is available on
+all your user's devices, simply configure a `SyncEngine` in the entry point of the app: 
+
+```swift
+@main
+struct MyApp: App {
+  init() {
+    prepareDependencies {
+      $0.defaultDatabase = try! appDatabase()
+      $0.defaultSyncEngine = SyncEngine(
+        for: $0.defaultDatabase,
+        tables: Item.self
+      )
+    }
+  }
+  // ...
+}
+```
+
+> [!NOTE]
+> For more information on synchronizing the database to CloudKit and sharing records with iCloud
+> users, see [CloudKit Synchronization].
+
 This is all you need to know to get started with SharingGRDB, but there's much more to learn. Read
 the [articles][articles] below to learn how to best utilize this library:
 
@@ -261,6 +285,7 @@ the [articles][articles] below to learn how to best utilize this library:
   * [Observing changes to model data][observing-article]
   * [Preparing a SQLite database][preparing-db-article]
   * [Dynamic queries][dynamic-queries-article]
+  * [CloudKit Synchronization]
   * [Comparison with SwiftData][comparison-swiftdata-article]
 
 [observing-article]: https://swiftpackageindex.com/pointfreeco/sharing-grdb/main/documentation/sharinggrdbcore/observing
@@ -269,6 +294,7 @@ the [articles][articles] below to learn how to best utilize this library:
 [comparison-swiftdata-article]: https://swiftpackageindex.com/pointfreeco/sharing-grdb/main/documentation/sharinggrdbcore/comparisonwithswiftdata
 [fetching-article]: https://swiftpackageindex.com/pointfreeco/sharing-grdb/main/documentation/sharinggrdbcore/fetching
 [preparing-db-article]: https://swiftpackageindex.com/pointfreeco/sharing-grdb/main/documentation/sharinggrdbcore/preparingdatabase
+[CloudKit Synchronization]: https://swiftpackageindex.com/pointfreeco/sharing-grdb/main/documentation/sharinggrdbcore/cloudkit
 [fetchall-docs]: https://swiftpackageindex.com/pointfreeco/sharing-grdb/main/documentation/sharinggrdbcore/fetchall
 [fetchone-docs]: https://swiftpackageindex.com/pointfreeco/sharing-grdb/main/documentation/sharinggrdbcore/fetchone
 
