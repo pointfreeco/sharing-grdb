@@ -74,6 +74,7 @@ struct FetchTests {
 private struct Record: Equatable {
   let id: Int
 }
+
 extension DatabaseWriter where Self == DatabaseQueue {
   fileprivate static func database() throws -> DatabaseQueue {
     let database = try DatabaseQueue()
