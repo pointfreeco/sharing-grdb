@@ -2,6 +2,10 @@
 import Foundation
 import os
 
+#if SharingGRDBSwiftLog
+  import Logging
+#endif
+
 @available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
 func defaultMetadatabase(
   logger: Logger,
@@ -9,16 +13,35 @@ func defaultMetadatabase(
 ) throws -> any DatabaseReader {
   var configuration = Configuration()
   configuration.prepareDatabase { [logger] db in
-    db.trace {
-      logger.trace("\($0.expandedDescription)")
+    db.trace { event in
+      switch logger {
+      case .osLogger(let logger):
+        logger.trace("\(event.expandedDescription)")
+      #if SharingGRDBSwiftLog
+        case .swiftLogger(let logger):
+          logger.trace("\(event.expandedDescription)")
+      #endif
+      }
     }
   }
-  logger.debug(
-    """
-    Metadatabase connection:
-    open "\(url.path(percentEncoded: false))"
-    """
-  )
+  
+  switch logger {
+  case .osLogger(let logger):
+    logger.debug(
+      """
+      Metadatabase connection:
+      open "\(url.path(percentEncoded: false))"
+      """
+    )
+  #if SharingGRDBSwiftLog
+    case .swiftLogger(let logger):
+      logger.debug(
+        "Metadatabase connection: Open",
+        metadata: ["connection.url": "\(url.path(percentEncoded: false))"]
+      )
+  #endif
+  }
+  
   try FileManager.default.createDirectory(
     at: .applicationSupportDirectory,
     withIntermediateDirectories: true

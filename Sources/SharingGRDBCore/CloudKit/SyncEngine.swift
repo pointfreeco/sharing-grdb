@@ -8,8 +8,22 @@
   import StructuredQueriesCore
   import SwiftData
 
+  #if SharingGRDBSwiftLog
+    import Logging
+  #endif
+
   @available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
   public final class SyncEngine: Sendable {
+    #if SharingGRDBSwiftLog
+      public static let defaultLogger: Logger = isTesting
+        ? .swiftLogger(Logging.Logger(label: "disabled") { _ in SwiftLogNoOpLogHandler() })
+        : .swiftLogger(Logging.Logger(label: "cloudkit.sqlite.data"))
+    #else
+      public static let defaultLogger: Logger = isTesting
+        ? .osLogger(os.Logger(.disabled))
+        : .osLogger(os.Logger(subsystem: "SQLiteData", category: "CloudKit"))
+    #endif
+    
     package let userDatabase: UserDatabase
     package let logger: Logger
     package let metadatabase: any DatabaseReader
@@ -26,15 +40,14 @@
     package let container: any CloudContainer
     let dataManager = Dependency(\.dataManager)
     public static let writePermissionError = "co.pointfree.sqlitedata-icloud.write-permission-error"
-
+    
     public convenience init<each T1: PrimaryKeyedTable, each T2: PrimaryKeyedTable>(
       for database: any DatabaseWriter,
       tables: repeat (each T1).Type,
       privateTables: repeat (each T2).Type,
       containerIdentifier: String? = nil,
       defaultZone: CKRecordZone = CKRecordZone(zoneName: "co.pointfree.SQLiteData.defaultZone"),
-      logger: Logger = isTesting
-        ? Logger(.disabled) : Logger(subsystem: "SQLiteData", category: "CloudKit")
+      logger: Logger = defaultLogger
     ) throws
     where
       repeat (each T1).PrimaryKey.QueryOutput: IdentifierStringConvertible,
@@ -652,14 +665,31 @@
               keyValue in strings += ["\(keyValue.key) (\(keyValue.value.count))"]
             }
             .joined(separator: ", ")
-          logger.debug(
-            """
-            [\(syncEngine.database.databaseScope.label)] nextRecordZoneChangeBatch: \(reason)
-              \(state.missingTables.isEmpty ? "⚪️ No missing tables" : "⚠️ Missing tables: \(missingTables)")
-              \(state.missingRecords.isEmpty ? "⚪️ No missing records" : "⚠️ Missing records: \(missingRecords)")
-              \(state.sentRecords.isEmpty ? "⚪️ No sent records" : "✅ Sent records: \(sentRecords)")
-            """
-          )
+          
+          switch logger {
+          case .osLogger(let logger):
+            logger.debug(
+              """
+              [\(syncEngine.database.databaseScope.label)] nextRecordZoneChangeBatch: \(reason)
+                \(state.missingTables.isEmpty ? "⚪️ No missing tables" : "⚠️ Missing tables: \(missingTables)")
+                \(state.missingRecords.isEmpty ? "⚪️ No missing records" : "⚠️ Missing records: \(missingRecords)")
+                \(state.sentRecords.isEmpty ? "⚪️ No sent records" : "✅ Sent records: \(sentRecords)")
+              """
+            )
+          #if SharingGRDBSwiftLog
+            case .swiftLogger(let logger):
+              logger.debug(
+                "nextRecordZoneChangeBatch",
+                metadata: [
+                  "databaseScope.label": "\(syncEngine.database.databaseScope.label)",
+                  "syncEngine.reason": "\(reason)",
+                  "missing.tables": state.missingTables.isEmpty ? "⚪️ No missing tables" : "⚠️ Missing tables: \(missingTables)",
+                  "missing.records": state.missingRecords.isEmpty ? "⚪️ No missing records" : "⚠️ Missing records: \(missingRecords)",
+                  "sent.records": state.sentRecords.isEmpty ? "⚪️ No sent records" : "✅ Sent records: \(sentRecords)"
+                ]
+              )
+          #endif
+          }
         }
       #endif
 

@@ -156,7 +156,7 @@ extension SyncEngine {
         )
       },
       userDatabase: userDatabase,
-      logger: Logger(.disabled),
+      logger: .osLogger(os.Logger(.disabled)),
       tables: tables,
       privateTables: privateTables
     )
