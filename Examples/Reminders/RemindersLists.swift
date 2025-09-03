@@ -1,3 +1,4 @@
+import CloudKit
 import SharingGRDB
 import SwiftUI
 import SwiftUINavigation
@@ -11,9 +12,16 @@ class RemindersListsModel {
     RemindersList
       .group(by: \.id)
       .order(by: \.position)
-      .leftJoin(Reminder.all) { $0.id.eq($1.remindersListID) && !$1.isCompleted }
+      .leftJoin(Reminder.all) {
+        $0.id.eq($1.remindersListID) && !$1.isCompleted
+      }
+      .leftJoin(SyncMetadata.all) { $0.recordName.eq($2.recordName) }
       .select {
-        ReminderListState.Columns(remindersCount: $1.id.count(), remindersList: $0)
+        ReminderListState.Columns(
+          remindersCount: $1.id.count(),
+          remindersList: $0,
+          share: $2.share
+        )
       },
     animation: .default
   )
@@ -35,7 +43,7 @@ class RemindersListsModel {
     Reminder.select {
       Stats.Columns(
         allCount: $0.count(filter: !$0.isCompleted),
-        flaggedCount: $0.count(filter: $0.isFlagged),
+        flaggedCount: $0.count(filter: $0.isFlagged && !$0.isCompleted),
         scheduledCount: $0.count(filter: $0.isScheduled),
         todayCount: $0.count(filter: $0.isToday)
       )
@@ -70,6 +78,18 @@ class RemindersListsModel {
         detailType: .tags([tag])
       )
     )
+  }
+
+  func deleteTags(atOffsets offsets: IndexSet) {
+    withErrorReporting {
+      let tagTitles = offsets.map { tags[$0].title }
+      try database.write { db in
+        try Tag
+          .where { $0.title.in(tagTitles) }
+          .delete()
+          .execute(db)
+      }
+    }
   }
 
   func onAppear() {
@@ -112,7 +132,7 @@ class RemindersListsModel {
             let ids = Array(ids.enumerated())
             let (first, rest) = (ids.first!, ids.dropFirst())
             $0.position =
-            rest
+              rest
               .reduce(Case($0.id).when(first.element, then: first.offset)) { cases, id in
                 cases.when(id.element, then: id.offset)
               }
@@ -124,13 +144,13 @@ class RemindersListsModel {
   }
 
   #if DEBUG
-  func seedDatabaseButtonTapped() {
-    withErrorReporting {
-      try database.write { db in
-        try db.seedSampleData()
+    func seedDatabaseButtonTapped() {
+      withErrorReporting {
+        try database.write { db in
+          try db.seedSampleData()
+        }
       }
     }
-  }
   #endif
 
   @CasePathable
@@ -145,6 +165,8 @@ class RemindersListsModel {
     var id: RemindersList.ID { remindersList.id }
     var remindersCount: Int
     var remindersList: RemindersList
+    @Column(as: CKShare?.SystemFieldsRepresentation.self)
+    var share: CKShare?
   }
 
   @Selection
@@ -170,6 +192,8 @@ class RemindersListsModel {
 
 struct RemindersListsView: View {
   @Bindable var model: RemindersListsModel
+  @State var id = UUID()
+  @Dependency(\.defaultSyncEngine) var syncEngine
 
   var body: some View {
     List {
@@ -237,9 +261,11 @@ struct RemindersListsView: View {
             } label: {
               RemindersListRow(
                 remindersCount: state.remindersCount,
-                remindersList: state.remindersList
+                remindersList: state.remindersList,
+                share: state.share
               )
             }
+            .buttonStyle(.borderless)
             .foregroundStyle(.primary)
           }
           .onMove(perform: model.move(from:to:))
@@ -262,6 +288,9 @@ struct RemindersListsView: View {
             }
             .foregroundStyle(.primary)
           }
+          .onDelete { offsets in
+            model.deleteTags(atOffsets: offsets)
+          }
         } header: {
           Text("Tags")
             .font(.system(.title2, design: .rounded, weight: .bold))
@@ -279,13 +308,29 @@ struct RemindersListsView: View {
     .listStyle(.insetGrouped)
     .toolbar {
       #if DEBUG
-      ToolbarItem(placement: .automatic) {
+        ToolbarItem(placement: .automatic) {
           Menu {
             Button {
               model.seedDatabaseButtonTapped()
             } label: {
               Text("Seed data")
               Image(systemName: "leaf")
+            }
+            Button {
+              if syncEngine.isRunning {
+                syncEngine.stop()
+                id = UUID()
+              } else {
+                Task {
+                  await withErrorReporting {
+                    try await syncEngine.start()
+                  }
+                  id = UUID()
+                }
+              }
+            } label: {
+              Text("\(syncEngine.isRunning ? "Stop" : "Start") synchronizing")
+              Image(systemName: syncEngine.isRunning ? "stop" : "play")
             }
           } label: {
             Image(systemName: "ellipsis.circle")
@@ -342,6 +387,7 @@ struct RemindersListsView: View {
     .navigationDestination(item: $model.destination.detail) { detailModel in
       RemindersDetailView(model: detailModel)
     }
+    .id(id)
   }
 }
 
