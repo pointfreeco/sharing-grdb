@@ -598,10 +598,29 @@
 
     @DatabaseFunction(
       "sqlitedata_icloud_didUpdate",
-      as: ((String, CKRecord?.SystemFieldsRepresentation) -> Void).self
+      as: (
+        (String, CKRecord?.SystemFieldsRepresentation, CKRecord?.SystemFieldsRepresentation, String?, String?) -> Void
+      ).self
     )
-    func didUpdate(recordName: String, record: CKRecord?) {
-      let zoneID = record?.recordID.zoneID ?? defaultZone.zoneID
+    func didUpdate(
+      recordName: String,
+      lastKnownServerRecord: CKRecord?,
+      newParentLastKnownServerRecord: CKRecord?,
+      parentRecordPrimaryKey: String? = nil,
+      parentRecordType: String? = nil
+    ) throws {
+      let zoneID = lastKnownServerRecord?.recordID.zoneID ?? defaultZone.zoneID
+      let newZoneID = newParentLastKnownServerRecord?.recordID.zoneID
+      if let newZoneID, zoneID != newZoneID {
+        reportIssue("""
+          The record '\(recordName)' was moved from zone \
+          '\(zoneID.zoneName)/\(zoneID.ownerName)' to \
+          '\(newZoneID.zoneName)/\(newZoneID.ownerName)'. This is currently not supported in \
+          SQLiteData. To work around, delete the record and then create a new record with its \
+          new parent association.
+          """)
+      }
+
       let change = CKSyncEngine.PendingRecordZoneChange.saveRecord(
         CKRecord.ID(
           recordName: recordName,
@@ -1347,7 +1366,9 @@
             let table = tablesByName[failedRecord.recordType],
             foreignKeysByTableName[table.tableName]?.count == 1,
             let foreignKey = foreignKeysByTableName[table.tableName]?.first
-          else { continue }
+          else {
+            continue
+          }
           func open<T: PrimaryKeyedTable>(_: T.Type) async throws {
             try await userDatabase.write { db in
               try $_isSynchronizingChanges.withValue(false) {
