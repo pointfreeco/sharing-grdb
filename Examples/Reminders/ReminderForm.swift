@@ -1,5 +1,5 @@
 import IssueReporting
-import SharingGRDB
+import SQLiteData
 import SwiftUI
 
 struct ReminderFormView: View {
@@ -211,7 +211,7 @@ struct ReminderFormPreview: PreviewProvider {
         let remindersList = try RemindersList.all.fetchOne(db)!
         return (
           remindersList,
-          try Reminder.where { $0.remindersListID == remindersList.id }.fetchOne(db)!
+          try Reminder.where { $0.remindersListID.eq(remindersList.id) }.fetchOne(db)!
         )
       }
     }
